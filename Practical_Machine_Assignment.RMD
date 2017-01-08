@@ -1,0 +1,184 @@
+---
+title: "Practical Machine Language Assignment"
+author: "Tushar Kathe"
+date: "January 8, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ??? a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will use data recorded from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data Set
+
+```{r line1}
+
+training <- read.csv("./pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+
+testing <- read.csv("./pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+
+```
+
+Look at data
+
+```{r line2}
+
+str(training, list.len=10)
+
+table(training$classe)
+
+prop.table(table(training$user_name, training$classe), 1)
+
+prop.table(table(training$classe))
+
+```
+
+Cleaning the Data
+
+Remove columns 1 to 6 as they are for information:
+
+```{r line3}
+
+training <- training[, 7:160]
+
+testing  <- testing[, 7:160]
+
+```
+
+Remove NA
+
+```{r line4}
+
+clean_data  <- apply(!is.na(training), 2, sum) > 19621
+
+training <- training[, clean_data]
+
+testing  <- testing[, clean_data]
+
+```
+
+Subsample 60% of the set for training purposes, while the 40% remainder will be used for testing
+
+```{r line5}
+
+library(caret)
+
+set.seed(12345)
+inTrain <- createDataPartition(y=training$classe, p=0.60, list=FALSE)
+trainset11  <- training[inTrain,]
+trainset12  <- training[-inTrain,]
+dim(trainset11)
+
+dim(trainset12)
+
+```
+
+Identify the zero covariates from trainset11 and remove these zero covariates from both trainset11 and trainset12
+
+```{r line6}
+
+nzv_cols <- nearZeroVar(trainset11)
+if(length(nzv_cols) > 0) {
+  trainset11 <- trainset11[, -nzv_cols]
+  trainset12 <- trainset12[, -nzv_cols]
+}
+dim(trainset11)
+
+dim(trainset12)
+
+```
+Data Manipulation
+Building Decision Tree Model
+
+```{r line6a}
+library(rpart)
+library(rattle)
+library(caret)
+
+modFitDT <- rpart(classe ~ ., data = trainset11, method="class")
+fancyRpartPlot(modFitDT)
+
+```
+
+Predicting with Decision Tree
+
+```{r line7}
+
+set.seed(12345)
+
+prediction <- predict(modFitDT, trainset12, type = "class")
+confusionMatrix(prediction, trainset12$classe)
+
+```
+
+The accuracy is 0.8
+Building the Random Forest Model
+
+```{r line8}
+
+library(randomForest)
+set.seed(12345)
+modFitRF <- randomForest(classe ~ ., data = trainset11, ntree = 1000)
+
+```
+
+The accuracy is 0.99
+Predicting with Random Forest Model
+
+```{r line9}
+
+prediction <- predict(modFitRF, trainset12, type = "class")
+confusionMatrix(prediction, trainset12$classe)
+
+```
+
+Out of sample error rate
+
+```{r line10}
+
+missClass = function(values, predicted) {
+  sum(predicted != values) / length(values)
+}
+OOS_errRate = missClass(trainset12$classe, prediction)
+OOS_errRate
+
+```
+
+Predicting on Testing Data
+Predicting with Decision Tree
+
+```{r line11}
+
+predictionDT <- predict(modFitDT,testing, type = "class")
+predictionDT
+
+```
+
+Predicting with Random Forest
+
+```{r line12}
+
+predictionRF <- predict(modFitRF, testing, type = "class")
+predictionRF
+
+```
+
+Submission
+
+```{r line13}
+
+write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_",i,".txt")
+    write.table(x[i], file=filename, quote=FALSE, row.names=FALSE, col.names=FALSE)
+  }
+}
+write_files(predictionRF)
+
+```
+
